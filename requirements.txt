@@ -1,0 +1,45 @@
+# ── RepoMind CI Auto-Fix Agent ──
+# Core
+python-dotenv==1.1.0
+pyyaml==6.0.2
+pydantic==2.11.3
+
+# Web / Lambda
+fastapi==0.115.12
+uvicorn==0.34.2
+mangum==0.19.0
+
+# AWS
+boto3==1.38.24
+
+# GitHub
+PyGithub==2.6.0
+PyJWT==2.10.1
+cryptography==44.0.3
+
+# HTTP + Resilience
+httpx==0.28.1
+tenacity==9.1.2
+
+# LLM
+groq==0.25.0
+
+# Embeddings (OpenAI API — lightweight, Lambda-friendly)
+openai==1.82.0
+
+# Vector DB
+qdrant-client==1.14.2
+
+# LangGraph Orchestration (heavy — excluded from Lambda for now)
+# langgraph==0.2.60
+
+# Logging
+structlog==25.1.0
+
+# Observability (Step 11)
+prometheus-client==0.21.1
+
+# Testing (not needed in Lambda)
+# pytest==8.3.5
+# pytest-asyncio==0.26.0
+# pytest-cov==6.1.1

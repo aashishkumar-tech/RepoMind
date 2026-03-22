@@ -1,0 +1,92 @@
+[project]
+name = "repomind"
+version = "1.0.0-alpha"
+description = "CI Auto-Fix Agent — automatically detects and fixes CI failures"
+requires-python = ">=3.12"
+
+# ──────────────────────────────────────────────
+# Ruff — Fast Python Linter
+# ──────────────────────────────────────────────
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+src = ["shared", "step1", "step2", "step3", "step4", "step5", "step6", "step7", "step8", "step9", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "I",     # isort
+    "N",     # pep8-naming
+    "UP",    # pyupgrade
+    "B",     # flake8-bugbear
+    "SIM",   # flake8-simplify
+    "TCH",   # flake8-type-checking
+    "RUF",   # ruff-specific rules
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "B008",   # do not perform function call in argument defaults
+    "B905",   # `zip()` without an explicit `strict=` parameter
+    "SIM108", # use ternary operator
+    "UP007",  # use X | Y for union types (not always readable)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["shared", "step1", "step2", "step3", "step4", "step5", "step6", "step7", "step8", "step9"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011", "B017", "SIM"]   # Relax rules in tests
+
+# ──────────────────────────────────────────────
+# Black — Code Formatter
+# ──────────────────────────────────────────────
+[tool.black]
+line-length = 120
+target-version = ["py312"]
+
+# ──────────────────────────────────────────────
+# Mypy — Static Type Checker
+# ──────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false    # Relaxed for alpha (LLM code may lack types)
+check_untyped_defs = true
+no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+# ──────────────────────────────────────────────
+# Pytest
+# ──────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+# ──────────────────────────────────────────────
+# Coverage
+# ──────────────────────────────────────────────
+[tool.coverage.run]
+source = ["shared", "step1", "step2", "step3", "step4", "step5", "step6", "step7", "step8", "step9"]
+omit = ["tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 60
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__",
+    "raise NotImplementedError",
+]

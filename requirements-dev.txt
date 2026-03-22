@@ -1,0 +1,20 @@
+# ── RepoMind Development Dependencies ──
+# Install: pip install -r requirements-dev.txt
+# These are IN ADDITION to requirements.txt
+
+# Linting
+ruff==0.8.6
+
+# Formatting
+black==24.10.0
+
+# Type Checking
+mypy==1.14.1
+
+# Testing (also in requirements.txt, listed here for completeness)
+pytest==8.3.5
+pytest-asyncio==0.26.0
+pytest-cov==6.1.1
+
+# Coverage reporting
+coverage[toml]==7.6.10
