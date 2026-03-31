@@ -1,0 +1,59 @@
+# ──────────────────────────────────────────────
+# RepoMind Monitoring Stack
+# ──────────────────────────────────────────────
+# Run: docker-compose up -d
+# Stop: docker-compose down
+# Logs: docker-compose logs -f
+# ──────────────────────────────────────────────
+
+services:
+
+  # ── Pushgateway ──
+  # Lambda pushes metrics here via HTTP POST
+  # URL: http://localhost:9091
+  pushgateway:
+    image: prom/pushgateway:latest
+    container_name: repomind-pushgateway
+    ports:
+      - "9091:9091"
+    restart: unless-stopped
+
+  # ── Prometheus ──
+  # Scrapes Pushgateway every 15s, stores time-series data
+  # URL: http://localhost:9090
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: repomind-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    depends_on:
+      - pushgateway
+    restart: unless-stopped
+
+  # ── Grafana ──
+  # Beautiful dashboards, queries Prometheus
+  # URL: http://localhost:3001
+  # Login: admin / repomind123
+  grafana:
+    image: grafana/grafana:latest
+    container_name: repomind-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=repomind123
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./provisioning/datasources:/etc/grafana/provisioning/datasources
+      - ./provisioning/dashboards:/etc/grafana/provisioning/dashboards
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  prometheus_data:
+  grafana_data:

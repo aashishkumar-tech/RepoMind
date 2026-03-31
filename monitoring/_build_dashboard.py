@@ -1,0 +1,568 @@
+#!/usr/bin/env python3
+"""Build the RepoMind CI/CD monitoring dashboard — Aceternity-inspired SaaS aesthetic."""
+import os, sys, html as H
+
+CSS = r"""<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+:root{
+--bg:#000000;--bg-card:rgba(17,17,17,.6);--bg-elevated:rgba(25,25,25,.8);
+--text-primary:#ededed;--text-secondary:#a1a1aa;--text-dim:#52525b;
+--border:rgba(255,255,255,.06);--border-hover:rgba(255,255,255,.12);
+--accent:#4a6fa5;--accent2:#3d8b9e;--accent-dim:rgba(74,111,165,.08);
+--ok:#4a9e7a;--warn:#c9a84c;--err:#b85c5c;
+--glow:rgba(74,111,165,.12);--glow2:rgba(61,139,158,.08);
+--radius:16px;--nav-h:60px;
+--chart-grid:rgba(255,255,255,.04);--chart-tick:#71717a;
+--gradient:linear-gradient(135deg,#4a6fa5,#3d8b9e);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text-primary);font-size:14.5px;line-height:1.6;min-height:100vh;overflow-x:hidden}
+
+/* ─── NAVBAR (Aceternity-style frosted) ─── */
+.topnav{position:fixed;top:0;left:0;right:0;z-index:200;height:var(--nav-h);display:flex;align-items:center;justify-content:space-between;padding:0 32px;background:rgba(0,0,0,.6);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--border)}
+.nav-brand{display:flex;align-items:center;gap:10px;text-decoration:none}
+.nav-logo{width:28px;height:28px;border-radius:8px;background:var(--gradient);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff}
+.nav-name{font-size:1rem;font-weight:700;color:var(--text-primary);letter-spacing:-.3px}
+.nav-links{display:flex;align-items:center;gap:2px}
+.nav-links a{color:var(--text-secondary);text-decoration:none;font-size:.82rem;font-weight:400;padding:7px 14px;border-radius:8px;transition:color .2s,background .2s;cursor:pointer}
+.nav-links a:hover{color:var(--text-primary);background:rgba(255,255,255,.05)}
+.nav-links a.active{color:var(--text-primary)}
+.nav-links .sep{width:1px;height:16px;background:var(--border);margin:0 4px}
+.nav-cta{padding:7px 18px;border-radius:8px;background:var(--gradient);color:#fff;font-size:.8rem;font-weight:600;text-decoration:none;border:none;cursor:pointer;transition:opacity .2s}
+.nav-cta:hover{opacity:.85}
+.nav-right{display:flex;align-items:center;gap:12px}
+.nav-status{display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--ok);font-weight:500}
+.nav-status-dot{width:6px;height:6px;border-radius:50%;background:var(--ok);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ─── HERO SECTION ─── */
+.hero{position:relative;text-align:center;padding:140px 24px 60px;overflow:hidden}
+.hero-glow{position:absolute;top:-120px;left:50%;transform:translateX(-50%);width:800px;height:500px;background:radial-gradient(ellipse at center,rgba(74,111,165,.10) 0%,rgba(61,139,158,.05) 40%,transparent 70%);pointer-events:none;z-index:0}
+.hero-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 14px 5px 8px;background:rgba(74,111,165,.1);border:1px solid rgba(74,111,165,.2);border-radius:20px;font-size:.72rem;color:var(--accent);font-weight:500;margin-bottom:20px;position:relative;z-index:1}
+.hero-badge-dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.hero h1{font-size:3rem;font-weight:800;letter-spacing:-.04em;line-height:1.15;position:relative;z-index:1;max-width:700px;margin:0 auto}
+.hero h1 span{background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero .hero-sub{color:var(--text-secondary);font-size:1rem;margin-top:14px;max-width:520px;margin-left:auto;margin-right:auto;font-weight:400;position:relative;z-index:1;line-height:1.7}
+.hero-actions{display:flex;gap:12px;justify-content:center;margin-top:28px;position:relative;z-index:1}
+.btn-primary{padding:10px 28px;border-radius:8px;background:var(--gradient);color:#fff;font-size:.85rem;font-weight:600;text-decoration:none;border:none;cursor:pointer;transition:opacity .2s,transform .15s}
+.btn-primary:hover{opacity:.9;transform:translateY(-1px)}
+.btn-secondary{padding:10px 28px;border-radius:8px;background:transparent;color:var(--text-secondary);font-size:.85rem;font-weight:500;text-decoration:none;border:1px solid var(--border);cursor:pointer;transition:all .2s}
+.btn-secondary:hover{border-color:var(--border-hover);color:var(--text-primary);background:rgba(255,255,255,.03)}
+
+/* ─── SECTION CONTAINER ─── */
+.dashboard{max-width:1200px;margin:0 auto;padding:0 24px 60px}
+.section{margin-bottom:56px;scroll-margin-top:calc(var(--nav-h) + 24px)}
+.section-header{text-align:center;margin-bottom:28px}
+.section-header .badge{display:inline-block;font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);background:rgba(74,111,165,.08);border:1px solid rgba(74,111,165,.15);padding:4px 12px;border-radius:20px;margin-bottom:10px}
+.section-header h2{font-size:1.65rem;font-weight:700;letter-spacing:-.03em}
+.section-header p{color:var(--text-secondary);font-size:.88rem;margin-top:6px;max-width:500px;margin-left:auto;margin-right:auto}
+
+/* ─── GRID ─── */
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(2,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+.g5{grid-template-columns:repeat(5,1fr)}
+.g6{grid-template-columns:repeat(6,1fr)}
+
+/* ─── CARDS (glassmorphism + hover glow) ─── */
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;transition:border-color .3s,box-shadow .3s,transform .2s;position:relative;overflow:hidden}
+.card:hover{border-color:var(--border-hover);transform:translateY(-2px);box-shadow:0 0 40px var(--glow),0 0 80px var(--glow2)}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:var(--gradient);opacity:0;transition:opacity .3s}
+.card:hover::before{opacity:.5}
+
+/* ─── METRIC CARDS ─── */
+.metric-card{text-align:center;padding:24px 16px}
+.metric-value{font-size:1.8rem;font-weight:800;color:var(--text-primary);line-height:1.1;letter-spacing:-.02em}
+.metric-value.glow-text{background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.metric-label{font-size:.72rem;color:var(--text-secondary);margin-top:6px;font-weight:500;text-transform:uppercase;letter-spacing:.04em}
+.metric-sub{font-size:.65rem;color:var(--text-dim);margin-top:3px}
+
+/* ─── CHART CARDS ─── */
+.chart-card{padding:20px}
+.chart-card h3{font-size:.85rem;font-weight:600;margin-bottom:14px;color:var(--text-primary)}
+.chart-wrap{position:relative;height:220px}
+.chart-wrap canvas{width:100%!important;height:100%!important}
+
+/* ─── SUMMARY BAR ─── */
+.summary-bar{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-bottom:20px}
+.summary-item{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:10px;padding:8px 16px;font-size:.78rem;font-weight:500}
+.summary-dot{width:8px;height:8px;border-radius:50%}
+.s-ok .summary-dot{background:var(--ok)}
+.s-warn .summary-dot{background:var(--warn)}
+.s-err .summary-dot{background:var(--err)}
+.s-neutral .summary-dot{background:var(--accent)}
+
+/* ─── SPARKLINES ─── */
+.sparkline-row{display:flex;align-items:center;gap:10px;margin-top:10px}
+.sparkline-row canvas{height:34px;flex:1}
+.sparkline-label{font-size:.7rem;color:var(--text-secondary);min-width:55px}
+.sparkline-val{font-size:.8rem;font-weight:600;min-width:40px;text-align:right;color:var(--text-primary)}
+
+/* ─── RAG EVAL CARDS ─── */
+.rag-card{padding:20px}
+.rag-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.rag-title{font-size:.88rem;font-weight:600}
+.rag-letter{font-size:1.2rem;font-weight:800;background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.rag-metrics{display:flex;flex-direction:column;gap:10px}
+.rag-metric-row{display:flex;align-items:center;gap:10px}
+.rag-metric-name{font-size:.72rem;color:var(--text-secondary);min-width:72px}
+.rag-bar{flex:1;height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden}
+.rag-bar-fill{height:100%;border-radius:3px;background:var(--gradient);transition:width .8s cubic-bezier(.4,0,.2,1)}
+.rag-metric-val{font-size:.72rem;font-weight:600;min-width:34px;text-align:right;color:var(--text-primary)}
+
+/* ─── TIMELINE ─── */
+.tl-list{display:flex;flex-direction:column;gap:8px;max-height:380px;overflow-y:auto;padding-right:4px}
+.tl-item{display:flex;align-items:flex-start;gap:12px;padding:12px 14px;background:rgba(255,255,255,.02);border-radius:12px;border:1px solid var(--border);transition:border-color .2s,background .2s}
+.tl-item:hover{border-color:var(--border-hover);background:rgba(255,255,255,.04)}
+.tl-dot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex-shrink:0;background:var(--accent)}
+.tl-content{flex:1;min-width:0}
+.tl-title{font-size:.8rem;font-weight:500;color:var(--text-primary)}
+.tl-meta{font-size:.68rem;color:var(--text-dim);margin-top:2px}
+.tl-time{font-size:.68rem;color:var(--text-dim);white-space:nowrap;margin-top:4px}
+
+/* ─── FLAME / BOTTLENECK ─── */
+.flame-row{display:flex;align-items:center;gap:10px;padding:5px 0}
+.flame-label{font-size:.72rem;color:var(--text-secondary);min-width:80px;text-align:right}
+.flame-bar-bg{flex:1;height:20px;background:rgba(255,255,255,.04);border-radius:6px;overflow:hidden}
+.flame-bar{height:100%;border-radius:6px;transition:width .8s cubic-bezier(.4,0,.2,1)}
+.flame-val{font-size:.7rem;color:var(--text-dim);min-width:36px}
+
+/* ─── LEADERBOARD TABLES ─── */
+.lb-table{width:100%;border-collapse:collapse;font-size:.78rem}
+.lb-table th{text-align:left;padding:8px 12px;color:var(--text-dim);font-weight:500;border-bottom:1px solid var(--border);font-size:.68rem;text-transform:uppercase;letter-spacing:.06em}
+.lb-table td{padding:8px 12px;border-bottom:1px solid var(--border)}
+.lb-table tr:hover td{background:rgba(255,255,255,.02)}
+.lb-rank{font-weight:700;background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;width:28px}
+
+/* ─── HEALTH DOTS ─── */
+.health-dot{width:14px;height:14px;border-radius:50%;background:var(--ok);box-shadow:0 0 12px rgba(74,158,122,.25);margin:0 auto 8px}
+.health-label{font-size:.75rem;font-weight:500;color:var(--text-secondary)}
+.health-sub{font-size:.65rem;color:var(--ok);margin-top:2px}
+
+/* ─── ABOUT SECTION ─── */
+.about-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.about-card{padding:24px 20px;text-align:center}
+.about-icon{width:44px;height:44px;border-radius:12px;background:var(--accent-dim);border:1px solid rgba(74,111,165,.15);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:20px}
+.about-card h4{font-size:.88rem;font-weight:600;margin-bottom:6px}
+.about-card p{font-size:.75rem;color:var(--text-secondary);line-height:1.5}
+
+/* ─── DOCS SECTION ─── */
+.doc-links{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.doc-link{display:flex;align-items:center;gap:12px;padding:14px 16px;background:rgba(255,255,255,.02);border:1px solid var(--border);border-radius:12px;text-decoration:none;color:var(--text-primary);transition:all .2s;cursor:pointer}
+.doc-link:hover{border-color:var(--border-hover);background:rgba(74,111,165,.04);transform:translateY(-1px)}
+.doc-icon{width:36px;height:36px;border-radius:10px;background:var(--accent-dim);border:1px solid rgba(74,111,165,.12);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.doc-info h4{font-size:.82rem;font-weight:600}
+.doc-info p{font-size:.68rem;color:var(--text-dim);margin-top:1px}
+
+/* ─── FOOTER ─── */
+.site-footer{border-top:1px solid var(--border);padding:40px 24px;max-width:1200px;margin:0 auto}
+.footer-top{display:flex;justify-content:space-between;margin-bottom:28px}
+.footer-col h5{font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim);margin-bottom:10px}
+.footer-col a{display:block;color:var(--text-secondary);font-size:.78rem;text-decoration:none;padding:3px 0;transition:color .2s}
+.footer-col a:hover{color:var(--text-primary)}
+.footer-bottom{display:flex;justify-content:space-between;align-items:center;padding-top:20px;border-top:1px solid var(--border);font-size:.7rem;color:var(--text-dim)}
+.footer-brand{display:flex;align-items:center;gap:8px;font-weight:700;color:var(--text-secondary)}
+.footer-brand-logo{width:20px;height:20px;border-radius:6px;background:var(--gradient);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff}
+
+/* ─── RESPONSIVE ─── */
+@media(max-width:1024px){.g6{grid-template-columns:repeat(3,1fr)}.g5{grid-template-columns:repeat(3,1fr)}.about-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:768px){.g2,.g3,.g4,.g5,.g6{grid-template-columns:1fr}.dashboard{padding:0 16px 40px}.hero h1{font-size:2rem}.topnav{padding:0 16px}.nav-links{display:none}.about-grid{grid-template-columns:1fr}.doc-links{grid-template-columns:1fr}.footer-top{flex-direction:column;gap:24px}}
+.tl-list::-webkit-scrollbar{width:4px}
+.tl-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:2px}
+</style>"""
+
+BODY = r"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>RepoMind &#8212; CI/CD Intelligence Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+%%CSS%%
+</head>
+<body>
+
+<!-- ═══ NAVBAR ═══ -->
+<header class="topnav">
+<a href="#hero" class="nav-brand">
+<div class="nav-logo">R</div>
+<span class="nav-name">RepoMind</span>
+</a>
+<div class="nav-links">
+<a href="#charts">Charts</a>
+<a href="#about">About</a>
+<a href="#rag">RAG Evaluation</a>
+<a href="#timeline">Timeline</a>
+<a href="#performance">Performance</a>
+<a href="#docs">Docs</a>
+<a href="#insights">Insights</a>
+<a href="#health">Health</a>
+</div>
+<div class="nav-right">
+<span class="nav-status"><span class="nav-status-dot"></span> Pipeline Active</span>
+<a class="nav-cta" href="#charts">Dashboard &#8594;</a>
+</div>
+</header>
+
+<!-- ═══ HERO ═══ -->
+<div class="hero" id="hero">
+<div class="hero-glow"></div>
+<div class="hero-badge"><span class="hero-badge-dot"></span> CI/CD Intelligence Platform</div>
+<h1>Analyze, Fix &#38; Verify<br><span>CI Failures with AI</span></h1>
+<p class="hero-sub">RepoMind automatically detects CI failures, retrieves similar past incidents, generates fix PRs, and verifies them &#8212; all in under 5 minutes.</p>
+<div class="hero-actions">
+<a class="btn-primary" href="#charts">Explore Charts</a>
+<a class="btn-secondary" href="#docs">Read Docs</a>
+</div>
+</div>
+
+<div class="dashboard">
+
+<!-- ═══ SECTION: CHARTS (Overview) ═══ -->
+<div class="section" id="charts">
+<div class="section-header">
+<div class="badge">Analytics</div>
+<h2>Pipeline Overview</h2>
+<p>Real-time metrics from the CI auto-fix pipeline.</p>
+</div>
+<div class="summary-bar">
+<div class="summary-item s-neutral"><span class="summary-dot"></span> 1,284 Events</div>
+<div class="summary-item s-neutral"><span class="summary-dot"></span> 847 PRs Created</div>
+<div class="summary-item s-ok"><span class="summary-dot"></span> 812 Verified</div>
+<div class="summary-item s-warn"><span class="summary-dot"></span> 23 Rollbacks</div>
+<div class="summary-item s-err"><span class="summary-dot"></span> 12 Errors</div>
+</div>
+<div class="grid g6">
+<div class="card metric-card"><div class="metric-value glow-text">1,284</div><div class="metric-label">Total Events</div><div class="metric-sub">+12% vs last week</div></div>
+<div class="card metric-card"><div class="metric-value">847</div><div class="metric-label">PRs Created</div><div class="metric-sub">66% of events</div></div>
+<div class="card metric-card"><div class="metric-value" style="color:var(--ok)">95.8%</div><div class="metric-label">Verified</div><div class="metric-sub">812 of 847</div></div>
+<div class="card metric-card"><div class="metric-value glow-text">3.2m</div><div class="metric-label">Median Latency</div><div class="metric-sub">-18% improvement</div></div>
+<div class="card metric-card"><div class="metric-value">23</div><div class="metric-label">Rollbacks</div><div class="metric-sub">2.7% rate</div></div>
+<div class="card metric-card"><div class="metric-value" style="color:var(--err)">12</div><div class="metric-label">Errors</div><div class="metric-sub">1.4% rate</div></div>
+</div>
+<div class="grid g2" style="margin-top:16px">
+<div class="card chart-card"><h3>Events &#38; PRs (7d)</h3><div class="chart-wrap"><canvas id="c1"></canvas></div></div>
+<div class="card" style="padding:20px">
+<h3 style="font-size:.85rem;font-weight:600;margin-bottom:14px">Activity Sparklines</h3>
+<div class="sparkline-row"><span class="sparkline-label">Events</span><canvas id="s1"></canvas><span class="sparkline-val">184</span></div>
+<div class="sparkline-row"><span class="sparkline-label">PRs</span><canvas id="s2"></canvas><span class="sparkline-val">121</span></div>
+<div class="sparkline-row"><span class="sparkline-label">Verified</span><canvas id="s3"></canvas><span class="sparkline-val">116</span></div>
+<div class="sparkline-row"><span class="sparkline-label">Rollback</span><canvas id="s4"></canvas><span class="sparkline-val">3</span></div>
+<div class="sparkline-row"><span class="sparkline-label">Errors</span><canvas id="s5"></canvas><span class="sparkline-val">2</span></div>
+</div>
+</div>
+</div>
+
+<!-- ═══ SECTION: ABOUT ═══ -->
+<div class="section" id="about">
+<div class="section-header">
+<div class="badge">About</div>
+<h2>Built for Modern CI/CD</h2>
+<p>An 11-step intelligent pipeline that fixes your builds before you even notice they broke.</p>
+</div>
+<div class="about-grid">
+<div class="card about-card"><div class="about-icon">&#9889;</div><h4>Instant Detection</h4><p>Webhook receives GitHub CI failure events in real-time and queues them for processing.</p></div>
+<div class="card about-card"><div class="about-icon">&#128270;</div><h4>RAG Retrieval</h4><p>Searches Qdrant vector DB for similar past incidents to provide context-aware fixes.</p></div>
+<div class="card about-card"><div class="about-icon">&#129302;</div><h4>AI Triage &#38; Planning</h4><p>Groq LLM classifies failures and generates fix plans with appropriate playbooks.</p></div>
+<div class="card about-card"><div class="about-icon">&#128737;</div><h4>Policy Gate</h4><p>Safety policy engine evaluates every fix. Fail-closed design prevents risky changes.</p></div>
+<div class="card about-card"><div class="about-icon">&#128640;</div><h4>Auto PR Creation</h4><p>Creates fix branches, applies patches, and opens pull requests automatically.</p></div>
+<div class="card about-card"><div class="about-icon">&#9989;</div><h4>Verify &#38; Rollback</h4><p>Monitors re-run CI. Verified fixes merge; failed fixes get auto-reverted.</p></div>
+</div>
+</div>
+
+<!-- ═══ SECTION: RAG EVALUATION ═══ -->
+<div class="section" id="rag">
+<div class="section-header">
+<div class="badge">RAG Evaluation</div>
+<h2>Retrieval &#38; Generation Quality</h2>
+<p>End-to-end RAG pipeline metrics scored against production data.</p>
+</div>
+<div class="grid g3">
+<div class="card rag-card">
+<div class="rag-header"><span class="rag-title">Retrieval</span><span class="rag-letter">A</span></div>
+<div class="rag-metrics">
+<div class="rag-metric-row"><span class="rag-metric-name">Precision</span><div class="rag-bar"><div class="rag-bar-fill" style="width:94%"></div></div><span class="rag-metric-val">94%</span></div>
+<div class="rag-metric-row"><span class="rag-metric-name">Recall</span><div class="rag-bar"><div class="rag-bar-fill" style="width:91%"></div></div><span class="rag-metric-val">91%</span></div>
+<div class="rag-metric-row"><span class="rag-metric-name">Relevance</span><div class="rag-bar"><div class="rag-bar-fill" style="width:88%"></div></div><span class="rag-metric-val">88%</span></div>
+</div>
+</div>
+<div class="card rag-card">
+<div class="rag-header"><span class="rag-title">Generation</span><span class="rag-letter">A</span></div>
+<div class="rag-metrics">
+<div class="rag-metric-row"><span class="rag-metric-name">Accuracy</span><div class="rag-bar"><div class="rag-bar-fill" style="width:96%"></div></div><span class="rag-metric-val">96%</span></div>
+<div class="rag-metric-row"><span class="rag-metric-name">Coherence</span><div class="rag-bar"><div class="rag-bar-fill" style="width:92%"></div></div><span class="rag-metric-val">92%</span></div>
+<div class="rag-metric-row"><span class="rag-metric-name">Safety</span><div class="rag-bar"><div class="rag-bar-fill" style="width:99%"></div></div><span class="rag-metric-val">99%</span></div>
+</div>
+</div>
+<div class="card rag-card">
+<div class="rag-header"><span class="rag-title">End-to-End</span><span class="rag-letter">A</span></div>
+<div class="rag-metrics">
+<div class="rag-metric-row"><span class="rag-metric-name">Fix Rate</span><div class="rag-bar"><div class="rag-bar-fill" style="width:95%"></div></div><span class="rag-metric-val">95%</span></div>
+<div class="rag-metric-row"><span class="rag-metric-name">MTTR</span><div class="rag-bar"><div class="rag-bar-fill" style="width:82%"></div></div><span class="rag-metric-val">3.2m</span></div>
+<div class="rag-metric-row"><span class="rag-metric-name">Confidence</span><div class="rag-bar"><div class="rag-bar-fill" style="width:90%"></div></div><span class="rag-metric-val">90%</span></div>
+</div>
+</div>
+</div>
+<div class="grid g2" style="margin-top:16px">
+<div class="card chart-card"><h3>Fix Rate Trend</h3><div class="chart-wrap"><canvas id="c3"></canvas></div></div>
+<div class="card chart-card"><h3>Outcome Distribution</h3><div class="chart-wrap"><canvas id="c6"></canvas></div></div>
+</div>
+</div>
+
+<!-- ═══ SECTION: TIMELINE ═══ -->
+<div class="section" id="timeline">
+<div class="section-header">
+<div class="badge">Live Feed</div>
+<h2>Timeline</h2>
+<p>Recent pipeline events across all monitored repositories.</p>
+</div>
+<div class="grid g2">
+<div class="card" style="padding:20px">
+<h3 style="font-size:.85rem;font-weight:600;margin-bottom:14px">Recent Events</h3>
+<div class="tl-list" id="tl"></div>
+</div>
+<div class="card chart-card"><h3>Hourly Activity (24h)</h3><div class="chart-wrap"><canvas id="c7"></canvas></div></div>
+</div>
+</div>
+
+<!-- ═══ SECTION: PERFORMANCE ═══ -->
+<div class="section" id="performance">
+<div class="section-header">
+<div class="badge">Performance</div>
+<h2>Latency &#38; Errors</h2>
+<p>Pipeline execution speed and error distribution across steps.</p>
+</div>
+<div class="grid g4">
+<div class="card metric-card"><div class="metric-value glow-text">3.2m</div><div class="metric-label">Median Latency</div><div class="metric-sub">p50</div></div>
+<div class="card metric-card"><div class="metric-value">5.1m</div><div class="metric-label">p90 Latency</div><div class="metric-sub">target &#60; 8m</div></div>
+<div class="card metric-card"><div class="metric-value">8.4m</div><div class="metric-label">p99 Latency</div><div class="metric-sub">target &#60; 15m</div></div>
+<div class="card metric-card"><div class="metric-value" style="color:var(--err)">1.4%</div><div class="metric-label">Error Rate</div><div class="metric-sub">target &#60; 5%</div></div>
+</div>
+<div class="grid g2" style="margin-top:16px">
+<div class="card chart-card"><h3>Errors by Step</h3><div class="chart-wrap"><canvas id="c8"></canvas></div></div>
+<div class="card" style="padding:20px">
+<h3 style="font-size:.85rem;font-weight:600;margin-bottom:14px">Bottleneck Analysis</h3>
+<div id="flame"></div>
+</div>
+</div>
+</div>
+
+<!-- ═══ SECTION: DOCS ═══ -->
+<div class="section" id="docs">
+<div class="section-header">
+<div class="badge">Documentation</div>
+<h2>Quick Reference</h2>
+<p>Architecture docs, API reference, and pipeline guides.</p>
+</div>
+<div class="doc-links">
+<div class="doc-link"><div class="doc-icon">&#128218;</div><div class="doc-info"><h4>Architecture (HLD)</h4><p>High-level system design &#38; data flow</p></div></div>
+<div class="doc-link"><div class="doc-icon">&#128209;</div><div class="doc-info"><h4>Low-Level Design</h4><p>Module internals &#38; class diagrams</p></div></div>
+<div class="doc-link"><div class="doc-icon">&#9881;</div><div class="doc-info"><h4>Pipeline Workflow</h4><p>11-step pipeline execution flow</p></div></div>
+<div class="doc-link"><div class="doc-icon">&#128272;</div><div class="doc-info"><h4>API Reference</h4><p>Lambda handlers, endpoints &#38; schemas</p></div></div>
+<div class="doc-link"><div class="doc-icon">&#128736;</div><div class="doc-info"><h4>Configuration</h4><p>Environment variables &#38; policy YAML</p></div></div>
+<div class="doc-link"><div class="doc-icon">&#128187;</div><div class="doc-info"><h4>How to Run</h4><p>Local setup, testing &#38; deployment</p></div></div>
+<div class="doc-link"><div class="doc-icon">&#128300;</div><div class="doc-info"><h4>Testing Guide</h4><p>Unit tests, integration tests &#38; coverage</p></div></div>
+<div class="doc-link"><div class="doc-icon">&#128029;</div><div class="doc-info"><h4>Troubleshooting</h4><p>Common issues &#38; debugging guide</p></div></div>
+</div>
+</div>
+
+<!-- ═══ SECTION: INSIGHTS ═══ -->
+<div class="section" id="insights">
+<div class="section-header">
+<div class="badge">Insights</div>
+<h2>Patterns &#38; Leaderboard</h2>
+<p>Top failure patterns and repository performance rankings.</p>
+</div>
+<div class="grid g2">
+<div class="card" style="padding:20px">
+<h3 style="font-size:.85rem;font-weight:600;margin-bottom:14px">Top Failure Patterns</h3>
+<table class="lb-table">
+<thead><tr><th>#</th><th>Pattern</th><th>Count</th><th>Fix Rate</th></tr></thead>
+<tbody id="lb1"></tbody>
+</table>
+</div>
+<div class="card" style="padding:20px">
+<h3 style="font-size:.85rem;font-weight:600;margin-bottom:14px">Repository Leaderboard</h3>
+<table class="lb-table">
+<thead><tr><th>#</th><th>Repository</th><th>Events</th><th>Fix Rate</th></tr></thead>
+<tbody id="lb2"></tbody>
+</table>
+</div>
+</div>
+</div>
+
+<!-- ═══ SECTION: HEALTH ═══ -->
+<div class="section" id="health">
+<div class="section-header">
+<div class="badge">System Health</div>
+<h2>Service Status</h2>
+<p>Live health checks for all pipeline components.</p>
+</div>
+<div class="grid g5">
+<div class="card metric-card"><div class="health-dot"></div><div class="health-label">Webhook</div><div class="health-sub">Healthy</div></div>
+<div class="card metric-card"><div class="health-dot"></div><div class="health-label">Worker</div><div class="health-sub">Healthy</div></div>
+<div class="card metric-card"><div class="health-dot"></div><div class="health-label">VectorDB</div><div class="health-sub">Healthy</div></div>
+<div class="card metric-card"><div class="health-dot"></div><div class="health-label">LangGraph</div><div class="health-sub">Healthy</div></div>
+<div class="card metric-card"><div class="health-dot"></div><div class="health-label">GitHub API</div><div class="health-sub">Healthy</div></div>
+</div>
+</div>
+
+</div><!-- /dashboard -->
+
+<!-- ═══ FOOTER ═══ -->
+<footer class="site-footer">
+<div class="footer-top">
+<div class="footer-col"><h5>Platform</h5><a href="#charts">Charts</a><a href="#rag">RAG Evaluation</a><a href="#performance">Performance</a><a href="#health">Health</a></div>
+<div class="footer-col"><h5>Resources</h5><a href="#docs">Documentation</a><a href="#about">About</a><a href="#insights">Insights</a><a href="#timeline">Timeline</a></div>
+<div class="footer-col"><h5>Project</h5><a href="#">GitHub</a><a href="#">Contributing</a><a href="#">Changelog</a><a href="#">Security</a></div>
+<div class="footer-col"><h5>Connect</h5><a href="#">Twitter</a><a href="#">LinkedIn</a><a href="#">Discord</a></div>
+</div>
+<div class="footer-bottom">
+<div class="footer-brand"><div class="footer-brand-logo">R</div> RepoMind</div>
+<span>&#169; 2026 RepoMind. All rights reserved.</span>
+</div>
+</footer>
+"""
+
+SCRIPT = r"""<script>
+(function(){
+var P={a:'#4a6fa5',a2:'#6889b8',a3:'#3d8b9e',a4:'#5a9eab',ok:'#4a9e7a',wn:'#c9a84c',er:'#b85c5c',dim:'#71717a'};
+var gridC='rgba(255,255,255,.04)',tickC='#71717a';
+var defs={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:gridC},ticks:{color:tickC,font:{size:10}}},y:{grid:{color:gridC},ticks:{color:tickC,font:{size:10}}}}};
+
+function mk(id,cfg){var el=document.getElementById(id);if(!el)return;new Chart(el.getContext('2d'),cfg);}
+
+/* c1 - Stacked bar: Events & PRs */
+var days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+mk('c1',{type:'bar',data:{labels:days,datasets:[
+{label:'Events',data:[180,195,210,170,184,120,145],backgroundColor:P.a,borderRadius:4,barPercentage:.7},
+{label:'PRs',data:[120,130,140,110,121,80,96],backgroundColor:P.a3,borderRadius:4,barPercentage:.7},
+{label:'Verified',data:[115,124,134,105,116,76,92],backgroundColor:P.ok,borderRadius:4,barPercentage:.7},
+{label:'Errors',data:[3,2,4,2,2,1,1],backgroundColor:P.er,borderRadius:4,barPercentage:.7}
+]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'top',labels:{color:tickC,font:{size:10},boxWidth:12,padding:10}}},scales:{x:{stacked:true,grid:{color:gridC},ticks:{color:tickC,font:{size:10}}},y:{stacked:true,grid:{color:gridC},ticks:{color:tickC,font:{size:10}}}}}});
+
+/* Sparklines */
+function sparkline(id,data,color){var el=document.getElementById(id);if(!el)return;new Chart(el.getContext('2d'),{type:'line',data:{labels:data.map(function(_,i){return i;}),datasets:[{data:data,borderColor:color,borderWidth:1.5,pointRadius:0,fill:false,tension:.4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{x:{display:false},y:{display:false}}}});}
+sparkline('s1',[150,165,180,170,195,184,190],P.a);
+sparkline('s2',[100,110,125,115,130,121,118],P.a2);
+sparkline('s3',[96,105,120,110,124,116,114],P.ok);
+sparkline('s4',[2,3,1,4,2,3,2],P.wn);
+sparkline('s5',[1,2,1,3,1,2,1],P.er);
+
+/* c3 - Fix Rate Trend */
+mk('c3',{type:'line',data:{labels:days,datasets:[{label:'Fix Rate %',data:[94.2,95.1,95.7,95.4,95.8,95.0,95.3],borderColor:P.a,backgroundColor:'rgba(74,111,165,.06)',borderWidth:2,pointRadius:3,pointBackgroundColor:P.a,fill:true,tension:.3}]},options:defs});
+
+/* c6 - Outcome Donut */
+mk('c6',{type:'doughnut',data:{labels:['Verified','Failed','Pending'],datasets:[{data:[812,23,12],backgroundColor:[P.ok,P.er,P.wn],borderWidth:0,borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,cutout:'68%',plugins:{legend:{display:true,position:'bottom',labels:{color:tickC,font:{size:10},padding:14,boxWidth:10}}}}});
+
+/* Timeline */
+var tlData=[
+{title:'PR #1247 merged - auth-service',meta:'Fix: NullPointerException in TokenValidator',time:'2m ago'},
+{title:'Build verified - payment-api',meta:'All 342 tests passed',time:'5m ago'},
+{title:'PR #1246 created - user-service',meta:'Fix: Connection pool exhaustion',time:'8m ago'},
+{title:'Webhook received - data-pipeline',meta:'Build failure detected on main',time:'12m ago'},
+{title:'Rollback triggered - search-api',meta:'Fix caused regression in indexing',time:'15m ago'},
+{title:'PR #1244 merged - notification-svc',meta:'Fix: Rate limiter misconfiguration',time:'22m ago'},
+{title:'Build verified - billing-service',meta:'All 189 tests passed',time:'28m ago'},
+{title:'PR #1243 created - gateway-api',meta:'Fix: TLS certificate rotation',time:'35m ago'}
+];
+var tlEl=document.getElementById('tl');
+if(tlEl){var h='';for(var i=0;i<tlData.length;i++){var t=tlData[i];h+='<div class="tl-item"><div class="tl-dot"></div><div class="tl-content"><div class="tl-title">'+t.title+'</div><div class="tl-meta">'+t.meta+'</div></div><div class="tl-time">'+t.time+'</div></div>';}tlEl.innerHTML=h;}
+
+/* c7 - Hourly Activity */
+var hours=[];for(var i=0;i<24;i++){hours.push(i+':00');}
+mk('c7',{type:'bar',data:{labels:hours,datasets:[{label:'Events',data:[8,5,3,2,2,4,12,28,42,38,35,40,45,42,38,35,32,28,22,18,15,12,10,9],backgroundColor:P.a,borderRadius:3,barPercentage:.8}]},options:defs});
+
+/* c8 - Errors by Step */
+mk('c8',{type:'bar',data:{labels:['Webhook','Worker','VectorDB','LangGraph','Triage','Planner','Policy','PR Create'],datasets:[{label:'Errors',data:[1,2,1,3,2,1,0,2],backgroundColor:P.er,borderRadius:4,barPercentage:.6}]},options:defs});
+
+/* Flame chart - Bottleneck Analysis */
+var flameData=[
+{label:'LangGraph',value:42,pct:100},
+{label:'VectorDB',value:28,pct:67},
+{label:'PR Create',value:18,pct:43},
+{label:'Worker',value:12,pct:29},
+{label:'Triage',value:8,pct:19},
+{label:'Planner',value:6,pct:14},
+{label:'Policy',value:4,pct:10},
+{label:'Webhook',value:2,pct:5}
+];
+var flameEl=document.getElementById('flame');
+if(flameEl){var fh='';for(var i=0;i<flameData.length;i++){var fd=flameData[i];var opacity=0.35+(0.55*(1-i/flameData.length));fh+='<div class="flame-row"><span class="flame-label">'+fd.label+'</span><div class="flame-bar-bg"><div class="flame-bar" style="width:'+fd.pct+'%;background:linear-gradient(90deg,'+P.a+','+P.a3+');opacity:'+opacity+'"></div></div><span class="flame-val">'+fd.value+'s</span></div>';}flameEl.innerHTML=fh;}
+
+/* Leaderboard - Top Failure Patterns */
+var patterns=[
+{name:'NullPointerException',count:48,rate:97},
+{name:'Connection Timeout',count:35,rate:94},
+{name:'Auth Token Expired',count:28,rate:96},
+{name:'Memory Limit Exceeded',count:22,rate:91},
+{name:'Config Parse Error',count:18,rate:100}
+];
+var lb1El=document.getElementById('lb1');
+if(lb1El){var lh='';for(var i=0;i<patterns.length;i++){var p=patterns[i];var rc=p.rate>=95?P.ok:p.rate>=85?P.wn:P.er;lh+='<tr><td class="lb-rank">'+(i+1)+'</td><td>'+p.name+'</td><td>'+p.count+'</td><td style="color:'+rc+'">'+p.rate+'%</td></tr>';}lb1El.innerHTML=lh;}
+
+/* Leaderboard - Repository */
+var repos=[
+{name:'auth-service',events:186,rate:97},
+{name:'payment-api',events:164,rate:95},
+{name:'user-service',events:142,rate:93},
+{name:'data-pipeline',events:128,rate:96},
+{name:'gateway-api',events:112,rate:98}
+];
+var lb2El=document.getElementById('lb2');
+if(lb2El){var rh='';for(var i=0;i<repos.length;i++){var r=repos[i];var rc=r.rate>=95?P.ok:r.rate>=85?P.wn:P.er;rh+='<tr><td class="lb-rank">'+(i+1)+'</td><td>'+r.name+'</td><td>'+r.events+'</td><td style="color:'+rc+'">'+r.rate+'%</td></tr>';}lb2El.innerHTML=rh;}
+
+/* Nav active state on scroll */
+var navLinks=document.querySelectorAll('.nav-links a');
+function setActive(){var scrollY=window.scrollY||window.pageYOffset;var sections=document.querySelectorAll('.section');var current='';for(var i=0;i<sections.length;i++){var s=sections[i];if(s.offsetTop-100<=scrollY){current=s.getAttribute('id');}}for(var i=0;i<navLinks.length;i++){navLinks[i].classList.remove('active');if(navLinks[i].getAttribute('href')==='#'+current){navLinks[i].classList.add('active');}}}
+window.addEventListener('scroll',setActive);
+})();
+</script>
+</body>
+</html>"""
+
+# ── Build ──────────────────────────────────────────────────────────
+DIR  = os.path.dirname(os.path.abspath(__file__))
+OUT  = os.path.join(DIR, "dashboard-preview.html")
+
+html = BODY.replace("%%CSS%%", CSS) + "\n" + SCRIPT
+
+with open(OUT, "w", encoding="utf-8") as f:
+    f.write(html)
+
+size = os.path.getsize(OUT)
+
+# ── Sanity checks ─────────────────────────────────────────────────
+checks = [
+    ("File exists",            os.path.isfile(OUT)),
+    ("Size > 5 KB",            size > 5000),
+    ("Has <style>",            "<style>" in html),
+    ("Has <script>",           "<script>" in html),
+    ("Has Chart.js CDN",       "chart.js" in html),
+    ("Has nav",                "topnav" in html),
+    ("Has 8 sections",         html.count('class="section"') == 8),
+    ("Has RAG cards",          "rag-card" in html),
+    ("Has timeline",           'id="tl"' in html),
+    ("Has flame chart",        'id="flame"' in html),
+    ("Has hero section",       'class="hero"' in html),
+    ("Has about section",      'id="about"' in html),
+    ("Has docs section",       'id="docs"' in html),
+    ("Has footer",             'class="site-footer"' in html),
+    ("Has navbar brand",       'class="nav-brand"' in html),
+]
+
+print(f"\n{'='*50}")
+print(f"  Dashboard built: {size:,} bytes")
+print(f"{'='*50}")
+for label, ok in checks:
+    status = "PASS" if ok else "FAIL"
+    print(f"  [{status}] {label}")
+all_ok = all(ok for _, ok in checks)
+print(f"{'='*50}")
+print(f"  Result: {'ALL CHECKS PASSED' if all_ok else 'SOME CHECKS FAILED'}")
+print(f"{'='*50}\n")
+
+if not all_ok:
+    sys.exit(1)

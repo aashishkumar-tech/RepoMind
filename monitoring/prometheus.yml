@@ -1,0 +1,21 @@
+# ──────────────────────────────────────────────
+# Prometheus Configuration for RepoMind
+# ──────────────────────────────────────────────
+
+global:
+  scrape_interval: 15s          # Scrape every 15 seconds
+  evaluation_interval: 15s      # Evaluate rules every 15 seconds
+
+scrape_configs:
+
+  # ── Scrape Prometheus itself ──
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # ── Scrape Pushgateway ──
+  # This is where Lambda pushes metrics
+  - job_name: "pushgateway"
+    honor_labels: true           # Keep the original job/instance labels from Lambda
+    static_configs:
+      - targets: ["pushgateway:9091"]
