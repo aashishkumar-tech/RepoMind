@@ -1,0 +1,164 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  RepoMind CI Auto-Fix Agent
+  Serverless pipeline: Webhook → SQS → Worker
+
+# ──────────────────────────────────────────────
+# Global settings for all Lambda functions
+# ──────────────────────────────────────────────
+Globals:
+  Function:
+    Timeout: 300
+    MemorySize: 512
+    Runtime: python3.12
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        ENVIRONMENT: production
+        LOG_LEVEL: INFO
+        S3_DATA_BUCKET: !Ref DataBucket
+        GITHUB_APP_ID: !Ref GitHubAppId
+        GITHUB_INSTALLATION_ID: !Ref GitHubInstallationId
+        GITHUB_WEBHOOK_SECRET: !Ref GitHubWebhookSecret
+        GROQ_API_KEY: !Ref GroqApiKey
+        OPENAI_API_KEY: !Ref OpenAIApiKey
+
+# ──────────────────────────────────────────────
+# Parameters (set at deploy time)
+# ──────────────────────────────────────────────
+Parameters:
+  GitHubAppId:
+    Type: String
+    Description: GitHub App ID
+  GitHubInstallationId:
+    Type: String
+    Description: GitHub App Installation ID
+  GitHubWebhookSecret:
+    Type: String
+    Description: GitHub Webhook Secret
+    NoEcho: true
+  GroqApiKey:
+    Type: String
+    Description: Groq API Key
+    NoEcho: true
+  OpenAIApiKey:
+    Type: String
+    Description: OpenAI API Key (for embeddings)
+    NoEcho: true
+  PushgatewayUrl:
+    Type: String
+    Description: Prometheus Pushgateway URL (e.g. http://ec2-ip:9091)
+    Default: ""
+
+# ──────────────────────────────────────────────
+# Resources
+# ──────────────────────────────────────────────
+Resources:
+  # ── S3 Data Bucket ──
+  DataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "repomind-data-${AWS::AccountId}"
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteFullLogsAfter30Days
+            Prefix: events/
+            Status: Enabled
+            ExpirationInDays: 180
+
+  # ── SQS Queue ──
+  EventQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: repomind-events
+      VisibilityTimeout: 360
+      MessageRetentionPeriod: 86400
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+        maxReceiveCount: 3
+
+  # ── Dead Letter Queue ──
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: repomind-events-dlq
+      MessageRetentionPeriod: 1209600
+
+  # ── Step 1: Webhook Handler (API Gateway + Lambda) ──
+  WebhookFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: repomind-webhook
+      Handler: step1.lambda_handler.handler
+      CodeUri: .
+      Description: Receives GitHub webhooks and queues events
+      MemorySize: 256
+      Timeout: 30
+      Environment:
+        Variables:
+          SQS_QUEUE_URL: !Ref EventQueue
+      Policies:
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt EventQueue.QueueName
+      Events:
+        WebhookApi:
+          Type: Api
+          Properties:
+            Path: /webhook
+            Method: POST
+        HealthApi:
+          Type: Api
+          Properties:
+            Path: /health
+            Method: GET
+
+  # ── Step 2: Worker (SQS-triggered Lambda) ──
+  WorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: repomind-worker
+      Handler: step2.worker.lambda_handler
+      CodeUri: .
+      Description: Core pipeline orchestrator - processes CI failures
+      MemorySize: 1024
+      Timeout: 300
+      Environment:
+        Variables:
+          GITHUB_PRIVATE_KEY_PATH: /var/task/private-key.pem
+          PUSHGATEWAY_URL: !Ref PushgatewayUrl
+          METRICS_ENABLED: "true"
+          KILL_SWITCH_PARAM: /repomind/kill_switch
+          VERIFICATION_ENABLED: "true"
+          MAX_ROLLBACKS_PER_HOUR: "3"
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref DataBucket
+        - SQSPollerPolicy:
+            QueueName: !GetAtt EventQueue.QueueName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ssm:GetParameter
+              Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/repomind/*"
+      Events:
+        SQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt EventQueue.Arn
+            BatchSize: 1
+
+# ──────────────────────────────────────────────
+# Outputs
+# ──────────────────────────────────────────────
+Outputs:
+  WebhookUrl:
+    Description: URL for GitHub webhook
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/webhook"
+  EventQueueUrl:
+    Description: SQS Queue URL
+    Value: !Ref EventQueue
+  DataBucketName:
+    Description: S3 Data Bucket
+    Value: !Ref DataBucket
